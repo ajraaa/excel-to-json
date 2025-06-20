@@ -3,21 +3,20 @@ import json
 import os
 
 # --- KONFIGURASI ---
-# Pastikan nama file ini sesuai dengan file CSV Anda
 csv_file_path = 'data_keluarga.csv'
-
-# Folder ini akan dibuat untuk menyimpan semua file JSON
 output_folder = 'hasil_json'
 
-# --- NAMA KOLOM KUNCI (SESUAIKAN JIKA PERLU) ---
-# Jika nama kolom untuk Nomor KK di file Anda berbeda, ubah di sini.
-# Contoh: Jika nama kolomnya 'NOMOR KARTU KELUARGA', ubah baris di bawah.
+# --- NAMA KOLOM KUNCI (SESUAIKAN JIKA NAMA DI CSV BERBEDA) ---
 KOLOM_NOMOR_KK = 'NO KK'
 
-
-def konversi_csv_ke_json(path_csv, folder_output):
+def konversi_final(path_csv, folder_output):
+    """
+    Fungsi definitif yang membaca CSV dan mengonversinya ke JSON
+    sesuai dengan skema yang telah diberikan secara lengkap.
+    """
     try:
         # 1. Membaca file CSV
+        # dtype=str untuk memastikan NIK, KK, dll tidak kehilangan angka 0 di depan
         try:
             df = pd.read_csv(path_csv, encoding='utf-8', dtype=str)
             print("File CSV berhasil dibaca dengan encoding UTF-8.")
@@ -26,48 +25,66 @@ def konversi_csv_ke_json(path_csv, folder_output):
             df = pd.read_csv(path_csv, encoding='latin1', dtype=str)
             print("File CSV berhasil dibaca dengan encoding 'latin1'.")
 
-        # 2. Membersihkan nama kolom untuk mencegah KeyError
-        print("\nNama kolom asli:", list(df.columns))
+        # 2. Membersihkan nama kolom
         df.columns = df.columns.str.strip().str.upper()
         print("Nama kolom setelah dibersihkan:", list(df.columns))
 
-        # 3. Validasi apakah kolom KK ada setelah pembersihan
+        # 3. Validasi kolom KK
         if KOLOM_NOMOR_KK not in df.columns:
             print(f"\n--- ERROR KRITIS ---")
-            print(f"Kolom '{KOLOM_NOMOR_KK}' tidak ditemukan di file CSV Anda.")
-            print(f"Pastikan nama kolom sudah benar atau sesuaikan variabel 'KOLOM_NOMOR_KK' di dalam skrip.")
+            print(f"Kolom '{KOLOM_NOMOR_KK}' tidak ditemukan di file CSV.")
             return
 
         # 4. Membersihkan data
-        # Mengisi nilai kosong (NaN) dengan string kosong
         df.fillna('', inplace=True)
-        print("\nPembersihan data selesai.")
+        print("\nPembersihan data dan memulai proses konversi...")
 
-        # 5. Membuat folder output jika belum ada
+        # 5. Membuat folder output
         if not os.path.exists(folder_output):
             os.makedirs(folder_output)
             print(f"Folder '{folder_output}' berhasil dibuat.")
 
-        # 6. Mengelompokkan data berdasarkan Nomor KK
+        # 6. Mengelompokkan data
         grup_kk = df.groupby(KOLOM_NOMOR_KK)
         
         jumlah_file = 0
-        print("\nMemulai proses konversi...")
-
+        
         # 7. Iterasi dan pembuatan file JSON
         for no_kk, data_keluarga in grup_kk:
-            if not no_kk: continue # Lewati jika nomor KK kosong
+            if not no_kk: continue
             anggota_pertama = data_keluarga.iloc[0]
+
+            # Konversi 'versi' ke integer, default ke 0 jika error
+            try:
+                versi_int = int(float(anggota_pertama.get('VERSI', 0)))
+            except (ValueError, TypeError):
+                versi_int = 0
+
+            # Konversi 'Waktu Upload' ke format date-time ISO 8601 jika memungkinkan
+            try:
+                waktu_upload_obj = pd.to_datetime(anggota_pertama.get('WAKTU UPLOAD', ''))
+                waktu_upload_str = waktu_upload_obj.isoformat()
+            except (ValueError, TypeError):
+                waktu_upload_str = anggota_pertama.get('WAKTU UPLOAD', '')
+
 
             json_final = {
                 "kk": no_kk,
                 "alamatLengkap": {
-                    "alamat": anggota_pertama.get('ALAMAT', ''), "rt": anggota_pertama.get('RT', ''),
-                    "rw": anggota_pertama.get('RW', ''), "kelurahan": anggota_pertama.get('KELURAHAN', ''),
-                    "kecamatan": anggota_pertama.get('KECAMATAN', ''), "kabupaten": anggota_pertama.get('KABUPATEN', ''),
-                    "provinsi": anggota_pertama.get('PROVINSI', ''), "kodePos": anggota_pertama.get('KODE POS', '')
+                    "alamat": anggota_pertama.get('ALAMAT', ''),
+                    "rt": anggota_pertama.get('RT', ''),
+                    "rw": anggota_pertama.get('RW', ''),
+                    "kelurahan": anggota_pertama.get('KELURAHAN', ''),
+                    "kecamatan": anggota_pertama.get('KECAMATAN', ''),
+                    "kabupaten": anggota_pertama.get('KABUPATEN', ''),
+                    "provinsi": anggota_pertama.get('PROVINSI', ''),
+                    "kodePos": anggota_pertama.get('KODE POS', '')
                 },
-                "anggota": []
+                "anggota": [],
+                # --- MENAMBAHKAN FIELD SESUAI SKEMA LENGKAP ---
+                "diunggahOleh": anggota_pertama.get('DIUNGGAH OLEH', ''),
+                "waktuUpload": waktu_upload_str,
+                "versi": versi_int
             }
 
             for _, anggota in data_keluarga.iterrows():
@@ -78,13 +95,18 @@ def konversi_csv_ke_json(path_csv, folder_output):
                     tgl_lahir_str = None
 
                 json_final["anggota"].append({
-                    "nik": anggota.get('NIK', ''), "namaLengkap": anggota.get('NAMA', ''),
-                    "jenisKelamin": anggota.get('JENIS KELAMIN', ''), "tempatLahir": anggota.get('TEMPAT LAHIR', ''),
-                    "tanggalLahir": tgl_lahir_str, "agama": anggota.get('AGAMA', ''),
-                    "pendidikan": anggota.get('PENDIDIKAN', ''), "jenisPekerjaan": anggota.get('PEKERJAAN', ''),
+                    "nik": anggota.get('NIK', ''),
+                    "nama": anggota.get('NAMA', ''),
+                    "jenisKelamin": anggota.get('JENIS KELAMIN', ''),
+                    "tempatLahir": anggota.get('TEMPAT LAHIR', ''),
+                    "tanggalLahir": tgl_lahir_str,
+                    "agama": anggota.get('AGAMA', ''),
+                    "pendidikan": anggota.get('PENDIDIKAN', ''),
+                    "jenisPekerjaan": anggota.get('PEKERJAAN', ''),
                     "statusPernikahan": anggota.get('STATUS PERNIKAHAN', ''),
                     "statusHubunganKeluarga": anggota.get('HUBUNGAN KELUARGA', ''),
-                    "kewarganegaraan": anggota.get('KEWARGANEGARAAN', ''), "wallet": None
+                    "kewarganegaraan": anggota.get('KEWARGANEGARAAN', ''),
+                    "wallet": anggota.get('WALLET', None) or None
                 })
 
             path_file_json = os.path.join(folder_output, f"{no_kk}.json")
@@ -93,12 +115,12 @@ def konversi_csv_ke_json(path_csv, folder_output):
             
             jumlah_file += 1
         
-        print(f"\nPROSES SELESAI! Total {jumlah_file} file JSON telah dibuat di folder '{folder_output}'.")
+        print(f"\nPROSES SELESAI! Total {jumlah_file} file JSON telah dibuat.")
 
     except FileNotFoundError:
-        print(f"ERROR: File '{path_csv}' tidak ditemukan. Pastikan file berada di folder yang sama dengan skrip.")
+        print(f"ERROR: File '{path_csv}' tidak ditemukan.")
     except Exception as e:
         print(f"Terjadi error tak terduga: {e}")
 
 if __name__ == "__main__":
-    konversi_csv_ke_json(csv_file_path, output_folder)
+    konversi_final(csv_file_path, output_folder)
