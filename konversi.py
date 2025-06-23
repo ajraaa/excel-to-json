@@ -54,20 +54,6 @@ def konversi_final(path_csv, folder_output):
             if not no_kk: continue
             anggota_pertama = data_keluarga.iloc[0]
 
-            # Konversi 'versi' ke integer, default ke 0 jika error
-            try:
-                versi_int = int(float(anggota_pertama.get('VERSI', 0)))
-            except (ValueError, TypeError):
-                versi_int = 0
-
-            # Konversi 'Waktu Upload' ke format date-time ISO 8601 jika memungkinkan
-            try:
-                waktu_upload_obj = pd.to_datetime(anggota_pertama.get('WAKTU UPLOAD', ''))
-                waktu_upload_str = waktu_upload_obj.isoformat()
-            except (ValueError, TypeError):
-                waktu_upload_str = anggota_pertama.get('WAKTU UPLOAD', '')
-
-
             json_final = {
                 "kk": no_kk,
                 "alamatLengkap": {
@@ -82,9 +68,9 @@ def konversi_final(path_csv, folder_output):
                 },
                 "anggota": [],
                 # --- MENAMBAHKAN FIELD SESUAI SKEMA LENGKAP ---
-                "diunggahOleh": anggota_pertama.get('DIUNGGAH OLEH', ''),
-                "waktuUpload": waktu_upload_str,
-                "versi": versi_int
+                "diunggahOleh": 'Azzra_Dev',
+                "waktuUpload": '2025-06-20T12:00:00Z',
+                "versi": 1
             }
 
             for _, anggota in data_keluarga.iterrows():
